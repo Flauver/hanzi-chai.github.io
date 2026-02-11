@@ -12,6 +12,7 @@ import {
   真码复合体分析器,
   逸码复合体分析器,
   首右复合体分析器,
+  山樱无念复合体分析器,
   默认复合体分析器,
 } from "./compound.js";
 import { 默认拼音分析器 } from "./pinyin.js";
@@ -75,6 +76,7 @@ export function 注册内置组件(registry: 注册表) {
     真码复合体分析器,
     星空键道复合体分析器,
     首右复合体分析器,
+    山樱无念复合体分析器,
   ])
     registry.注册复合体分析器(x);
   for (const x of [默认组装器, 星空键道组装器]) registry.注册组装器(x);

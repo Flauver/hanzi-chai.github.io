@@ -5,9 +5,10 @@ import {
   type 逸码拆分方式,
   type 逸码部件分析,
   type 默认部件分析,
+  默认部件分析器,
 } from "./component.js";
 import type { 复合体数据, 结构表示符 } from "./data.js";
-import type { 基本分析, 字形分析配置 } from "./repertoire.js";
+import { 基本分析, 字形分析配置, 部件对应字形 } from "./repertoire.js";
 import { default_err, ok, type Result } from "./utils.js";
 
 interface 复合体分析器<
@@ -109,6 +110,136 @@ function 按首笔排序<T>(部分结果: T[], glyph: 复合体数据): T[] {
     glyph.order!.findIndex((b) => b.index === i),
   ).map((i) => 部分结果[i]!);
   return orderedResults;
+}
+
+interface 山樱无念复合体基本拆分 extends 基本分析 {
+  结构表示符: 结构表示符;
+  名称: string;
+}
+
+interface 山樱无念复合体真正拆分 extends 基本分析 {
+  结构表示符: 结构表示符;
+  部分结果: 山樱无念分析[];
+  完整结果: 山樱无念分析[];
+}
+
+type 山樱无念复合体分析 = 山樱无念复合体基本拆分 | 山樱无念复合体真正拆分;
+type 山樱无念分析 = 默认部件分析 | 山樱无念复合体分析;
+
+class 山樱无念复合体分析器 implements 复合体分析器<默认部件分析, 山樱无念分析> {
+  static readonly type = "山樱无念";
+
+  constructor(private 配置: 字形分析配置) {
+    this.部件拆分器 = new 默认部件分析器(this.配置);
+    this.笔画表.set("1", "一");
+    this.笔画表.set("2", "丨");
+    this.笔画表.set("3", "丿");
+    this.笔画表.set("4", "丶");
+    this.笔画表.set("5", "乚");
+  }
+
+  private 部件拆分器: 默认部件分析器;
+
+  private flat(部分结果: 山樱无念分析[], 存储: 山樱无念分析[]) {
+    for (const 部分 of 部分结果) {
+      if ("完整结果" in 部分) {
+        this.flat(部分.部分结果, 存储);
+      } else {
+        存储.push(部分);
+      }
+    }
+  }
+
+  private 笔画表: Map<string, string> = new Map();
+
+  private get(x: 山樱无念分析) {
+    if ("完整结果" in x) {
+      return x.完整结果;
+    } else if ("名称" in x) {
+      return [x];
+    } else {
+      return x.字根序列.map((x) => {
+        if (/^\d$/.test(x)) {
+          x = this.笔画表.get(x)!;
+        }
+        const r = this.部件拆分器.分析(x, 部件对应字形.get(x)!);
+        if (r.ok) return r.value;
+        throw r.error;
+      });
+    }
+  }
+
+  private typetonum(root: 山樱无念分析) {
+    if (this.配置.分析配置.strong!.indexOf(root.字根序列[0]!) !== -1) {
+      return 0;
+    } else if (this.配置.分析配置.weak!.indexOf(root.字根序列[0]!) !== -1) {
+      return 2;
+    } else {
+      return 1;
+    }
+  }
+
+  分析(
+    名称: string,
+    复合体: 复合体数据,
+    部分分析列表: 山樱无念分析[],
+  ): Result<山樱无念分析, Error> {
+    if (this.配置.字根决策.has(名称))
+      return ok({ 字根序列: [名称], 名称: 名称, 结构表示符: 复合体.operator });
+    let 部分结果: 山樱无念分析[] = [];
+    let 完整结果: 山樱无念分析[] = [];
+    let 独占: [山樱无念分析, number][] = [];
+    if ("⿰⿲".indexOf(复合体.operator) !== -1) {
+      //把左右结构的展平，统一取第一、末部分的首根
+      const flatted: 山樱无念分析[] = [];
+      this.flat(部分分析列表, flatted);
+      部分结果 = [
+        this.get(部分分析列表[0]!)![0]!,
+        this.get(部分分析列表.at(-1)!)![0]!,
+      ];
+      完整结果 = flatted.map((x) => this.get(x)).flat();
+      独占 = [
+        [部分结果[0]!, Number(this.get(部分分析列表[0]!).length !== 1)],
+        [部分结果[1]!, Number(this.get(部分分析列表.at(-1)!).length !== 1)],
+      ];
+    } else if (
+      "⿱⿳".indexOf(复合体.operator) !== -1 &&
+      部分分析列表
+        .map((x) => "结构表示符" in x && "⿰⿲".indexOf(x.结构表示符) !== -1)
+        .reduce((a, b) => a || b)
+    ) {
+      //上下结构里有左右结构的也可以二分
+      部分结果 = [
+        this.get(部分分析列表[0]!)![0]!,
+        this.get(部分分析列表.at(-1)!)![0]!,
+      ];
+      完整结果 = 部分分析列表.map((x) => this.get(x)).flat();
+      独占 = [
+        [部分结果[0]!, Number(this.get(部分分析列表[0]!).length !== 1)],
+        [部分结果[1]!, Number(this.get(部分分析列表.at(-1)!).length !== 1)],
+      ];
+    } else {
+      部分结果 = [
+        this.get(部分分析列表[0]!)[0]!,
+        this.get(部分分析列表.at(-1)!).at(-1)!,
+      ];
+      完整结果 = 部分分析列表.map((x) => this.get(x)).flat();
+    }
+
+    部分结果.sort((a, b) => this.typetonum(a) - this.typetonum(b));
+    部分结果.sort(
+      (a, b) =>
+        ((独占.find((x) => x[0] === a)?.[1] as number) ?? 0) -
+        ((独占.find((x) => x[0] === b)?.[1] as number) ?? 0),
+    );
+
+    return ok({
+      结构表示符: 复合体.operator,
+      字根序列: 部分结果.map((x) => this.get(x)[0]?.字根序列[0]!),
+      部分结果,
+      完整结果,
+    });
+  }
 }
 
 interface 分部取码复合体分析 extends 基本分析 {
@@ -458,6 +589,7 @@ export {
   星空键道复合体分析器,
   真码复合体分析器,
   首右复合体分析器,
+  山樱无念复合体分析器,
   默认复合体分析器,
   按首笔排序,
 };
