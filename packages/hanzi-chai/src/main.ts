@@ -3,6 +3,7 @@ import {
   二笔部件分析器,
   张码部件分析器,
   逸码部件分析器,
+  山樱无念部件分析器,
   默认部件分析器,
 } from "./component.js";
 import {
@@ -66,6 +67,7 @@ export function 注册内置组件(registry: 注册表) {
     二笔部件分析器,
     张码部件分析器,
     逸码部件分析器,
+    山樱无念部件分析器,
   ])
     registry.注册部件分析器(x);
   for (const x of [
