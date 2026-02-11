@@ -4,8 +4,9 @@ import {
   计算张码补码,
   type 逸码拆分方式,
   type 逸码部件分析,
+  type 山樱无念部件分析,
   type 默认部件分析,
-  默认部件分析器,
+  山樱无念部件分析器,
 } from "./component.js";
 import type { 复合体数据, 结构表示符 } from "./data.js";
 import { 基本分析, 字形分析配置, 部件对应字形 } from "./repertoire.js";
@@ -124,13 +125,13 @@ interface 山樱无念复合体真正拆分 extends 基本分析 {
 }
 
 type 山樱无念复合体分析 = 山樱无念复合体基本拆分 | 山樱无念复合体真正拆分;
-type 山樱无念分析 = 默认部件分析 | 山樱无念复合体分析;
+type 山樱无念分析 = 山樱无念部件分析 | 山樱无念复合体分析;
 
-class 山樱无念复合体分析器 implements 复合体分析器<默认部件分析, 山樱无念分析> {
+class 山樱无念复合体分析器 implements 复合体分析器<山樱无念部件分析, 山樱无念分析> {
   static readonly type = "山樱无念";
 
   constructor(private 配置: 字形分析配置) {
-    this.部件拆分器 = new 默认部件分析器(this.配置);
+    this.部件拆分器 = new 山樱无念部件分析器(this.配置);
     this.笔画表.set("1", "一");
     this.笔画表.set("2", "丨");
     this.笔画表.set("3", "丿");
@@ -138,7 +139,7 @@ class 山樱无念复合体分析器 implements 复合体分析器<默认部件�
     this.笔画表.set("5", "乚");
   }
 
-  private 部件拆分器: 默认部件分析器;
+  private 部件拆分器: 山樱无念部件分析器;
 
   private flat(部分结果: 山樱无念分析[], 存储: 山樱无念分析[]) {
     for (const 部分 of 部分结果) {
@@ -158,7 +159,7 @@ class 山樱无念复合体分析器 implements 复合体分析器<默认部件�
     } else if ("名称" in x) {
       return [x];
     } else {
-      return x.字根序列.map((x) => {
+      return x.完整字根序列.map((x) => {
         if (/^\d$/.test(x)) {
           x = this.笔画表.get(x)!;
         }

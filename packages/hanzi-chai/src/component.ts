@@ -457,17 +457,22 @@ class 默认部件分析器 implements 部件分析器<默认部件分析> {
   }
 }
 
-class 山樱无念部件分析器 implements 部件分析器<基本分析> {
+interface 山樱无念部件分析 extends 基本分析 {
+  完整字根序列: string[];
+}
+
+class 山樱无念部件分析器 implements 部件分析器<山樱无念部件分析> {
   static readonly type = "山樱无念";
   constructor(private 配置: 字形分析配置) {}
 
   分析(名称: string, 部件: 基本部件数据) {
-    if (this.配置.字根决策.has(名称)) return ok({ 字根序列: [名称] });
+    if (this.配置.字根决策.has(名称)) return ok({ 字根序列: [名称], 完整字根序列: [名称] });
     const 图形 =
       this.配置.字根图形映射.get(名称) ?? new 部件图形(名称, 部件.strokes);
     const 可选分析 = 图形.给出部件分析(this.配置);
     if (!可选分析.ok) return 可选分析;
-    const 分析 = 定制化分析(名称, 可选分析.value, this.配置);
+    const 分析 = {...定制化分析(名称, 可选分析.value, this.配置), 完整字根序列: [] as string[]};
+    分析.完整字根序列 = [...分析.字根序列];
     分析.字根序列 = [分析.字根序列[0]!, 分析.字根序列?.at(-1)!];
     return ok(分析);
   }
@@ -699,6 +704,7 @@ export type {
   张码部件分析,
   逸码拆分方式,
   逸码部件分析,
+  山樱无念部件分析,
   拆分方式与评价,
   部件分析器,
   默认部件分析,
