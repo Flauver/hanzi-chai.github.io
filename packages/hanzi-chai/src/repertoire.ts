@@ -63,8 +63,6 @@ interface 字形分析配置 {
   字根笔画映射: Map<string, number[]>;
 }
 
-const 部件对应字形: Map<string, 基本部件数据> = new Map();
-
 class 字库 {
   private repertoire: 字库数据;
 
@@ -435,7 +433,6 @@ class 字库 {
     const b = a.value;
     const 部件分析结果 = new Map<string, 基本分析 | 默认部件分析>();
     for (const [部件名称, 部件字形] of b.部件列表) {
-      部件对应字形.set(部件名称, 部件字形);
       const 分析 = b.部件分析器.分析(部件名称, 部件字形);
       if (!分析.ok) return 分析;
       部件分析结果.set(部件名称, 分析.value);
@@ -499,5 +496,5 @@ class 字库 {
   }
 }
 
-export { 字库, 部件对应字形 };
+export { 字库 };
 export type { 基本分析, 字形分析结果, 字形分析配置 };
