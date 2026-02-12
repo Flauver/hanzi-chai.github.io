@@ -112,23 +112,19 @@ function 按首笔排序<T>(部分结果: T[], glyph: 复合体数据): T[] {
   return orderedResults;
 }
 
-interface 山樱无念复合体基本拆分 extends 基本分析 {
-  结构表示符: 结构表示符;
-  名称: string;
-}
-
-interface 山樱无念复合体真正拆分 extends 基本分析 {
+interface 山樱无念复合体真正分析 extends 基本分析 {
   结构表示符: 结构表示符;
   部分结果: 山樱无念分析[];
   顺序部分结果: 山樱无念分析[];
   完整结果: 山樱无念分析[];
 }
 
-type 山樱无念复合体分析 = 山樱无念复合体基本拆分 | 山樱无念复合体真正拆分;
+type 山樱无念复合体分析 = 山樱无念复合体真正分析 | 基本分析;
+
 type 山樱无念分析 = 山樱无念部件分析 | 山樱无念复合体分析;
 
 class 山樱无念复合体分析器
-  implements 复合体分析器<山樱无念部件分析, 山樱无念分析>
+  implements 复合体分析器<山樱无念部件分析, 山樱无念复合体分析>
 {
   static readonly type = "山樱无念";
 
@@ -136,7 +132,11 @@ class 山樱无念复合体分析器
 
   private flat(部分结果: 山樱无念分析[], 存储: 山樱无念分析[]) {
     for (const 部分 of 部分结果) {
-      if ("完整结果" in 部分 && "⿰⿲".indexOf(部分.结构表示符) !== -1) {
+      if (
+        "完整结果" in 部分 &&
+        "结构表示符" in 部分 &&
+        "⿰⿲".indexOf(部分.结构表示符 ?? "") !== -1
+      ) {
         this.flat(部分.顺序部分结果, 存储);
       } else {
         存储.push(部分);
@@ -146,7 +146,11 @@ class 山樱无念复合体分析器
 
   private flat2(部分结果: 山樱无念分析[], 存储: 山樱无念分析[]) {
     for (const 部分 of 部分结果) {
-      if ("完整结果" in 部分 && "⿰⿲".indexOf(部分.结构表示符) !== -1) {
+      if (
+        "完整结果" in 部分 &&
+        "结构表示符" in 部分 &&
+        "⿰⿲".indexOf(部分.结构表示符) !== -1
+      ) {
         this.flat2(部分.完整结果, 存储);
       } else {
         存储.push(部分);
@@ -154,16 +158,17 @@ class 山樱无念复合体分析器
     }
   }
 
-  private get(x: 山樱无念分析) {
+  private get(x: 山樱无念分析): 山樱无念分析[] {
     if ("完整结果" in x) {
-      return x.完整结果;
-    } else if ("名称" in x) {
-      return [x];
+      return x.完整结果.map((x) => {
+        if (typeof x === "string") {
+          return { 字根序列: [x, x] };
+        } else {
+          return x;
+        }
+      });
     } else {
-      return x.完整字根序列.map((x) => ({
-        字根序列: [x, x],
-        名称: x,
-      }));
+      return [x];
     }
   }
 
@@ -214,7 +219,12 @@ class 山樱无念复合体分析器
     } else if (
       "⿱⿳".indexOf(复合体.operator) !== -1 &&
       部分分析列表
-        .map((x) => "完整结果" in x && "⿰⿲".indexOf(x.结构表示符) !== -1)
+        .map(
+          (x) =>
+            "完整结果" in x &&
+            "结构表示符" in x &&
+            "⿰⿲".indexOf(x.结构表示符) !== -1,
+        )
         .reduce((a, b) => a || b)
     ) {
       //上下结构里有左右结构的也可以二分
@@ -250,6 +260,12 @@ class 山樱无念复合体分析器
         this.get(部分分析列表.at(-1)!).at(-1)!,
       ];
       完整结果 = 部分分析列表.map((x) => this.get(x)).flat();
+      if (/^[票]$/.test(名称)) {
+        console.log(部分结果);
+        console.log(完整结果);
+        console.log(复合体);
+        console.log(独占);
+      }
     }
 
     const 顺序部分结果 = [...部分结果];
