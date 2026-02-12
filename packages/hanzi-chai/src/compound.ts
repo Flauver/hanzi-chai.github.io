@@ -205,16 +205,8 @@ class 山樱无念复合体分析器
       this.flat2(部分分析列表, flatted2);
       完整结果 = flatted2.map((x) => this.get(x)).flat();
       独占 = [
-        [
-          部分结果[0]!,
-          Number("完整结果" in flatted[0]! || "完整字根序列" in flatted[0]!),
-        ],
-        [
-          部分结果[1]!,
-          Number(
-            "完整结果" in flatted.at(-1)! || "完整字根序列" in flatted.at(-1)!,
-          ),
-        ],
+        [部分结果[0]!, Number("完整结果" in flatted[0]!)],
+        [部分结果[1]!, Number("完整结果" in flatted.at(-1)!)],
       ];
     } else if (
       "⿱⿳".indexOf(复合体.operator) !== -1 &&
@@ -234,20 +226,8 @@ class 山樱无念复合体分析器
       ];
       完整结果 = 部分分析列表.map((x) => this.get(x)).flat();
       独占 = [
-        [
-          部分结果[0]!,
-          Number(
-            "完整结果" in 部分分析列表[0]! ||
-              "完整字根序列" in 部分分析列表[0]!,
-          ),
-        ],
-        [
-          部分结果[1]!,
-          Number(
-            "完整结果" in 部分分析列表.at(-1)! ||
-              "完整字根序列" in 部分分析列表.at(-1)!,
-          ),
-        ],
+        [部分结果[0]!, Number("完整结果" in 部分分析列表[0]!)],
+        [部分结果[1]!, Number("完整结果" in 部分分析列表.at(-1)!)],
       ];
       if (/^[贤丝]$/.test(名称)) {
         console.log(部分结果);
