@@ -1,17 +1,17 @@
 import init, { Web } from "libchai";
-import { 组装, 字库 } from "./lib";
+import { 组装, 字库, 动态组装 } from "./lib";
 import axios from "axios";
 
 export interface WorkerInput {
-  type: "sync" | "encode" | "evaluate" | "optimize" | "analysis" | "assembly";
+  type: "sync" | "encode" | "evaluate" | "optimize" | "analysis" | "dynamic_analysis" | "assembly" | "dynamic_assembly";
   data: any;
 }
 
 export type WorkerOutput =
   | { type: "success"; result: any }
   | { type: "error"; error: Error }
-  | { type: "better_solution"; config: string; metric: string; save: boolean }
-  | { type: "progress"; steps: number; temperature: number; metric: string }
+  | { type: "better_solution"; config: string; metric: string; score: number; index?: number }
+  | { type: "progress"; config: string; metric: string; score: number; steps: number; temperature: number }
   | { type: "parameters"; t_max?: number; t_min?: number; steps?: number }
   | { type: "elapsed"; time: number }
   | { type: "trial_max"; temperature: number; accept_rate: number }
@@ -86,8 +86,16 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
         result = new 字库(data[0]).分析(data[1], data[2]);
         port.postMessage({ type: "success", result });
         break;
+      case "dynamic_analysis":
+        result = new 字库(data[0]).动态分析(data[1], data[2]);
+        port.postMessage({ type: "success", result });
+        break;
       case "assembly":
         result = 组装(data[0], data[1], data[2]);
+        port.postMessage({ type: "success", result });
+        break;
+      case "dynamic_assembly":
+        result = 动态组装(data[0], data[1], data[2]);
         port.postMessage({ type: "success", result });
         break;
       case "encode":
@@ -114,7 +122,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
           });
         } else {
           webInterface.sync(data[0]);
-          webInterface.optimize();
+          result = webInterface.optimize();
         }
         port.postMessage({ type: "success", result });
         break;

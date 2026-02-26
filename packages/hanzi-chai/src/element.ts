@@ -6,7 +6,7 @@ import type {
   运算符,
   键盘配置,
 } from "./config.js";
-import { 展开决策 } from "./utils.js";
+import { 展开决策, 计算当前或潜在长度 } from "./utils.js";
 
 export interface 额外信息 {
   字根笔画映射: Map<string, number[]>;
@@ -47,6 +47,10 @@ interface 字根二笔取码 extends 基本 {
   strokeIndex: number;
 }
 
+interface 结构取码 extends 基本 {
+  type: "结构";
+}
+
 interface 自定义取码 extends 基本 {
   type: "自定义";
   subtype: string;
@@ -65,13 +69,15 @@ export type 取码对象 =
   | 字根取码
   | 字根笔画取码
   | 字根二笔取码
+  | 结构取码
   | 自定义取码
   | 特殊取码;
 
 export const 摘要 = (object: 取码对象) => {
   switch (object.type) {
     case "汉字":
-      return "汉字";
+    case "结构":
+      return object.type;
     case "固定":
       return object.key;
     case "字音":
@@ -95,6 +101,7 @@ export const 转列表 = (object: 取码对象): (string | number)[] => {
   const list = [object.type];
   switch (object.type) {
     case "汉字":
+    case "结构":
       return list;
     case "固定":
       return [...list, object.key];
@@ -117,6 +124,7 @@ export const 从列表生成 = (value: (string | number)[]): 取码对象 => {
   const type = value[0] as 取码对象["type"];
   switch (type) {
     case "汉字":
+    case "结构":
       return { type };
     case "固定":
       return { type, key: value[1] as string };
@@ -153,6 +161,7 @@ function signedIndex<T>(a: T[], i: number): T | undefined {
 
 export class 取码器 {
   private 最终映射: Map<string, string>;
+  private 当前或潜在长度: Map<string, number>;
   private 谓词表: Record<
     运算符,
     (
@@ -178,12 +187,17 @@ export class 取码器 {
     private max_length: number,
     private extra: 额外信息,
   ) {
-    const { mapping } = keyboard;
+    const { mapping, mapping_space } = keyboard;
     const expanded = 展开决策(mapping);
+    const 当前或潜在长度 = 计算当前或潜在长度(mapping, mapping_space ?? {});
     if (!expanded.ok) {
       throw new Error(`键盘映射展开失败: ${expanded.error}`);
     }
+    if (!当前或潜在长度.ok) {
+      throw new Error(`键盘映射长度计算失败: ${当前或潜在长度.error}`);
+    }
     this.最终映射 = expanded.value;
+    this.当前或潜在长度 = 当前或潜在长度.value;
   }
 
   取码(汉字分析: 默认汉字分析) {
@@ -205,7 +219,7 @@ export class 取码器 {
           // 如果是固定编码，直接加入
           码位序列.push(元素);
         } else {
-          const 长度 = this.最终映射.get(元素)?.length ?? 0;
+          const 长度 = this.当前或潜在长度.get(元素) ?? 0;
           // 如果没有定义指标，就是全取；否则检查指标是否有效并取
           if (index === undefined) {
             for (let i = 0; i < 长度; i++) {
@@ -268,6 +282,8 @@ export class 取码器 {
         if (stroke1 === undefined) return undefined;
         stroke2 = signedIndex(strokes, object.strokeIndex * 2);
         return [stroke1, stroke2 ?? 0].join("");
+      case "结构":
+        return "结构" in result ? result.结构 : undefined;
       case "自定义":
         return signedIndex(
           result.自定义元素[object.subtype] ?? [],

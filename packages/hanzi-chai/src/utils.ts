@@ -1,7 +1,14 @@
 import { range } from "lodash-es";
 import type { 笔画名称 } from "./classifier.js";
 import { 笔画表示方式 } from "./classifier.js";
-import type { 决策, 广义码位, 码位 } from "./config.js";
+import type {
+  元素,
+  决策,
+  决策空间,
+  广义码位,
+  码位,
+  非空广义安排,
+} from "./config.js";
 import type {
   全等数据,
   原始汉字数据,
@@ -16,6 +23,12 @@ import type {
   绘制,
   衍生部件数据,
 } from "./data.js";
+import type {
+  兼容字形自定义,
+  动态组装条目,
+  字形自定义,
+  组装条目,
+} from "./main.js";
 
 // Result 类型定义
 export type Ok<T> = { ok: true; value: T };
@@ -305,7 +318,10 @@ export const 合并字符串 = <T extends 广义码位>(keys: T[]) => {
   return keys.every((x) => typeof x === "string") ? keys.join("") : keys;
 };
 
-const 展开决策值 = (mapping: 决策, key: string): Result<string, Error> => {
+const 展开决策值 = (
+  mapping: Record<元素, 非空广义安排>,
+  key: string,
+): Result<string, Error> => {
   const value = mapping[key];
   if (value === undefined) {
     return default_err(`决策中不存在键: ${key}`);
@@ -317,6 +333,11 @@ const 展开决策值 = (mapping: 决策, key: string): Result<string, Error> =>
     for (const part of value) {
       if (typeof part === "string") {
         parts.push(part);
+      } else if (
+        part === null ||
+        (typeof part === "object" && "variable" in part)
+      ) {
+        parts.push("a");
       } else {
         const 部分值 = 展开决策值(mapping, part.element);
         if (!部分值.ok) return 部分值;
@@ -335,6 +356,35 @@ export const 展开决策 = (mapping: 决策): Result<Map<string, string>, Error
     const value = 展开决策值(mapping, key);
     if (!value.ok) return value;
     result.set(key, value.value);
+  }
+  return ok(result);
+};
+
+export const 计算当前或潜在长度 = (
+  mapping: 决策,
+  mapping_space: 决策空间,
+): Result<Map<string, number>, Error> => {
+  const result = new Map<string, number>();
+  for (const key of Object.keys(mapping)) {
+    const value = 展开决策值(mapping, key);
+    if (!value.ok) return value;
+    result.set(key, value.value.length);
+  }
+  const 增广决策: Record<string, 非空广义安排> = { ...mapping };
+  for (const [key, value] of Object.entries(mapping_space)) {
+    if (!(key in 增广决策)) {
+      const v = value.find((x) => x.value !== null);
+      if (v !== undefined) {
+        增广决策[key] = v.value as 非空广义安排;
+      }
+    }
+  }
+  for (const key of Object.keys(增广决策)) {
+    if (!result.has(key)) {
+      const value = 展开决策值(增广决策, key);
+      if (!value.ok) return value;
+      result.set(key, value.value.length);
+    }
   }
   return ok(result);
 };
@@ -362,3 +412,48 @@ export const 码 = (汉字: string) =>
   汉字.codePointAt(0)!.toString(16).toUpperCase();
 
 export const 和编码 = (c: string) => `${c} (U+${码(c)})`;
+
+export const 排列组合 = <T>(array: T[][]): T[][] => {
+  if (array.length === 0) return [[]];
+  const [first, ...rest] = array;
+  const restCombinations = 排列组合(rest);
+  const combinations: T[][] = [];
+  for (const item of first!) {
+    for (const combination of restCombinations) {
+      combinations.push([item, ...combination]);
+    }
+  }
+  return combinations;
+};
+
+export const 添加优先简码 = <T extends 组装条目 | 动态组装条目>(
+  entries: T[],
+  优先简码映射: Map<string, number>,
+) => {
+  const result = entries.map((entry) => {
+    const hash = 识别符(entry.词, entry.拼音来源列表);
+    const level = 优先简码映射.get(hash);
+    const { 拼音来源列表, ...rest } = entry;
+    const value: Omit<T, "拼音来源列表"> & { 简码长度?: number } = rest;
+    if (level !== undefined) value.简码长度 = level;
+    return value;
+  });
+  return result;
+};
+
+export const 是地区标签 = (tag: string) => /^[GHTJKNVMSBU]$/.test(tag);
+
+export const 获取地区标签列表 = (glyph: 字形数据) =>
+  (glyph.tags ?? []).filter(是地区标签);
+
+export const 标准化自定义 = (字形自定义: 兼容字形自定义) => {
+  const 标准字形自定义: 字形自定义 = {};
+  for (const [char, value] of Object.entries(字形自定义)) {
+    if (Array.isArray(value)) {
+      标准字形自定义[char] = value;
+    } else {
+      标准字形自定义[char] = [value];
+    }
+  }
+  return 标准字形自定义;
+};

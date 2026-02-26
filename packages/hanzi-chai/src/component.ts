@@ -338,6 +338,7 @@ class 部件图形 {
     }
     const 字根序列 = 当前拆分方式.拆分方式.map((x) => x.名称);
     return ok({
+      类型: "部件" as const,
       字根序列,
       部件图形: this,
       字根笔画映射: 字根笔画索引映射,
@@ -436,12 +437,13 @@ interface 部件分析器<部件分析 extends 基本分析 = 基本分析> {
 /**
  * 部件通过自动拆分算法分析得到的拆分结果的全部细节
  */
-interface 默认部件分析 {
-  字根序列: string[];
+interface 默认部件分析 extends 基本分析 {
   部件图形: 部件图形;
   字根笔画映射: Map<string, number[][]>;
   当前拆分方式: 拆分方式与评价;
   全部拆分方式: 拆分方式与评价[];
+  // 用于存储因为自定义而被覆盖的拆分方式
+  被覆盖拆分方式?: 拆分方式与评价;
 }
 
 class 默认部件分析器 implements 部件分析器<默认部件分析> {
@@ -455,9 +457,28 @@ class 默认部件分析器 implements 部件分析器<默认部件分析> {
     if (!分析.ok) return 分析;
     return ok(定制化分析(名称, 分析.value, this.配置));
   }
+
+  动态分析(名称: string, 部件: 基本部件数据) {
+    const 图形 =
+      this.配置.字根图形映射.get(名称) ?? new 部件图形(名称, 部件.strokes);
+    const 分析 = 图形.给出部件分析(this.配置);
+    if (!分析.ok) return 分析;
+    const 基本分析 = 分析.value;
+    const 结果列表 = 基本分析.全部拆分方式
+      .filter((x) => x.可用)
+      .map((x) => {
+        return {
+          ...基本分析,
+          当前拆分方式: x,
+          字根序列: x.拆分方式.map((y) => y.名称),
+        };
+      });
+    return ok(动态定制化分析(名称, 结果列表, this.配置));
+  }
 }
 
 interface 山樱无念部件真正分析 extends 基本分析 {
+  类型: "部件";
   完整结果: string[];
 }
 
@@ -468,14 +489,15 @@ class 山樱无念部件分析器 implements 部件分析器<山樱无念部件�
   constructor(private 配置: 字形分析配置) {}
 
   分析(名称: string, 部件: 基本部件数据) {
-    if (this.配置.字根决策.has(名称)) return ok({ 字根序列: [名称, 名称] });
+    if (this.配置.字根决策.has(名称))
+      return ok({ 字根序列: [名称, 名称], 类型: "部件" } as 基本分析);
     const 图形 =
       this.配置.字根图形映射.get(名称) ?? new 部件图形(名称, 部件.strokes);
     const 可选分析 = 图形.给出部件分析(this.配置);
     if (!可选分析.ok) return 可选分析;
     if (可选分析.value.当前拆分方式.拆分方式.length === 1) {
       const 笔画 = 可选分析.value.当前拆分方式.拆分方式[0]?.名称!;
-      return ok({ 字根序列: [笔画, 笔画] });
+      return ok({ 字根序列: [笔画, 笔画], 类型: "部件" } as 基本分析);
     }
     const 分析 = {
       ...定制化分析(名称, 可选分析.value, this.配置),
@@ -492,7 +514,11 @@ class 二笔部件分析器 implements 部件分析器<基本分析> {
   constructor(private 配置: 字形分析配置) {}
 
   分析(名称: string, 部件: 基本部件数据) {
-    if (this.配置.字根决策.has(名称)) return ok({ 字根序列: [名称] });
+    const 结果: 基本分析 = { 类型: "部件", 字根序列: [] };
+    if (this.配置.字根决策.has(名称)) {
+      结果.字根序列.push(名称);
+      return ok(结果);
+    }
     const 笔画分类器 = this.配置.分类器;
     const 笔画列表 = 部件.strokes;
     const 第一笔 = 笔画列表[0];
@@ -502,7 +528,7 @@ class 二笔部件分析器 implements 部件分析器<基本分析> {
     const 第二笔 = 笔画列表[1];
     const 第一笔类别 = 笔画分类器[第一笔.feature].toString();
     const 第二笔类别 = 第二笔 ? 笔画分类器[第二笔.feature].toString() : "0";
-    const 结果 = { 字根序列: [第一笔类别 + 第二笔类别] };
+    结果.字根序列 = [第一笔类别 + 第二笔类别];
     if (笔画列表.length > 2) {
       const 末笔 = 笔画列表.at(-1)!;
       const 末笔类别 = 笔画分类器[末笔.feature].toString();
@@ -582,19 +608,12 @@ function 定制化分析<T extends 基本分析 | 默认部件分析>(
   部件分析: T,
   config: 字形分析配置,
 ) {
-  // const 动态自定义分析 = config.分析配置?.dynamic_customize ?? {};
-  // for (const [部件, 字根序列列表] of Object.entries(动态自定义分析)) {
-  //   for (const 字根序列 of 字根序列列表) {
-  //     if (!字根序列.every((x) => config.字根决策.has(x))) continue;
-  //     自定义分析[部件] = 字根序列;
-  //     break;
-  //   }
-  // }
   const 自定义分析 = config.分析配置.customize ?? {};
   const 字根序列 = 自定义分析[名称];
   if (字根序列 === undefined) return 部件分析;
   const 新分析: T = { ...部件分析, 字根序列 };
   if ("全部拆分方式" in 新分析) {
+    新分析.被覆盖拆分方式 = 新分析.当前拆分方式;
     const 拆分方式 = 新分析.全部拆分方式.find((x) => {
       return isEqual(
         x.拆分方式.map((y) => y.名称),
@@ -603,6 +622,32 @@ function 定制化分析<T extends 基本分析 | 默认部件分析>(
     });
     if (拆分方式 !== undefined) {
       新分析.当前拆分方式 = 拆分方式;
+    }
+  }
+  return 新分析;
+}
+
+function 动态定制化分析<T extends 基本分析 | 默认部件分析>(
+  名称: string,
+  部件分析列表: T[],
+  config: 字形分析配置,
+) {
+  const 动态自定义分析 = config.分析配置?.dynamic_customize ?? {};
+  const 自定义分析 = config.分析配置.customize ?? {};
+  let 全部字根序列 = 动态自定义分析[名称];
+  if (全部字根序列 === undefined && 自定义分析[名称] !== undefined) {
+    全部字根序列 = [自定义分析[名称]];
+  }
+  if (全部字根序列 === undefined) return 部件分析列表;
+  const 新分析: T[] = [];
+  for (const 字根序列 of 全部字根序列) {
+    const 分析 = 部件分析列表.find((x) => isEqual(x.字根序列, 字根序列));
+    if (分析) {
+      新分析.push(分析);
+    } else {
+      // 如果找不到完全匹配的分析，就用定制化分析覆盖当前分析
+      const 假装分析 = { ...部件分析列表[0]!, 字根序列 };
+      新分析.push(假装分析);
     }
   }
   return 新分析;
@@ -718,57 +763,3 @@ export type {
   部件分析器,
   默认部件分析,
 };
-
-// if (serializerName === "xkjd") {
-//   for (const [_, result] of componentResults.entries()) {
-//     result.sequence = limit(result.sequence, 4, config);
-//   }
-// } else if (serializerName === "snow2") {
-//   for (const [key, result] of componentResults.entries()) {
-//     result.sequence = result.sequence.slice(0, 1);
-//     if (result.sequence[0] !== key) result.sequence.push("");
-//   }
-// } else if (serializerName === "feihua") {
-//   for (const [key, result] of componentResults.entries()) {
-//     if ("schemes" in result) {
-//       const dc = config.analysis?.dynamic_customize ?? {};
-//       const schemeList =
-//         dc[key] ??
-//         result.schemes.filter((x) => x.optional).map((x) => x.roots);
-//       const scheme = schemeList.find((x) =>
-//         x.every((r) => {
-//           let value = config.roots.get(r)!;
-//           while (isMerge(value)) {
-//             value = config.roots.get(value.element)!;
-//           }
-//           return /[aoeiuv;/]/.test(value as string);
-//         }),
-//       )!;
-//       result.full2 = scheme;
-//       result.sequence = scheme.slice(0, 3);
-//     } else {
-//       result.full2 = [...result.full];
-//     }
-//   }
-// }
-
-// if (serializerName === "feihua") {
-//   const rawOperandResults = glyph.operandList.map(getResult);
-//   const operandResults = rawOperandResults as PartitionResult[];
-//   const serialization = serializer(operandResults, glyph, config);
-//   serialization.full = [char];
-//   let value = config.roots.get(char)!;
-//   while (isMerge(value)) {
-//     value = config.roots.get(value.element)!;
-//   }
-//   if (/[aoeiuv;/]/.test(value as string)) {
-//     serialization.full2 = [char];
-//   }
-//   compoundResults.set(char, serialization);
-//   continue;
-// }
-// // 复合体本身是一个字根
-// const sequence = [char];
-// if (serializerName === "snow2") {
-//   sequence.push("q");
-// }

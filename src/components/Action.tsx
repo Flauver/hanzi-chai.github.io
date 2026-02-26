@@ -12,7 +12,7 @@ import type { MenuProps } from "antd/lib";
 import { isInteger } from "lodash-es";
 import * as O from "optics-ts/standalone";
 import type { ForwardedRef } from "react";
-import { forwardRef, useContext, useState } from "react";
+import { forwardRef, useState } from "react";
 import {
   remoteBatchUpdate,
   remoteCreate,
@@ -26,9 +26,12 @@ import {
   useAtomValue,
   useRemoveAtom,
   下一个可用的码位原子,
-  原始字库数据原子,
+  原始可编辑字库数据原子,
+  原始字库原子,
   字形自定义原子,
+  标准字形自定义原子,
   用户原始字库数据原子,
+  远程原子,
 } from "~/atoms";
 import { DeleteButton, NumberInput } from "~/components/Utils";
 import {
@@ -43,7 +46,7 @@ import {
   模拟拼接部件,
   模拟衍生部件,
 } from "~/lib";
-import { errorFeedback, RemoteContext } from "~/utils";
+import { errorFeedback } from "~/utils";
 import CharacterSelect from "./CharacterSelect";
 import ComponentForm, { IdentityForm } from "./ComponentForm";
 import CompoundForm from "./CompoundForm";
@@ -68,10 +71,10 @@ export const Create = forwardRef(
 
 function CreatePopoverContent({ onCreate }: { onCreate: (s: string) => void }) {
   const addUser = useAddAtom(用户原始字库数据原子);
-  const add = useAddAtom(原始字库数据原子);
-  const remote = useContext(RemoteContext);
+  const add = useAddAtom(原始可编辑字库数据原子);
+  const remote = useAtomValue(远程原子);
   const nextUnicode = useAtomValue(下一个可用的码位原子);
-  const 原始字库数据 = useAtomValue(原始字库数据原子);
+  const 原始字库 = useAtomValue(原始字库原子);
   const options = [
     { label: "衍生部件", value: "derived_component" },
     { label: "拼接部件", value: "spliced_component" },
@@ -139,7 +142,7 @@ function CreatePopoverContent({ onCreate }: { onCreate: (s: string) => void }) {
             required: true,
             validator: (_, value: string) => {
               if (!value) return Promise.reject(new Error("不能为空"));
-              if (原始字库数据[value] !== undefined)
+              if (原始字库.查询(value) !== undefined)
                 return Promise.reject(new Error("字符已存在"));
               return Promise.resolve();
             },
@@ -198,7 +201,7 @@ const planMerge = (
 
 export const Merge = ({ unicode }: { unicode: number }) => {
   const [newName, setNewName] = useState("");
-  const [repertoire, setRepertoire] = useAtom(原始字库数据原子);
+  const [repertoire, setRepertoire] = useAtom(原始可编辑字库数据原子);
   return (
     <Popconfirm
       title="输入笔画搜索"
@@ -230,8 +233,8 @@ export const Rename = ({
   name: string | null;
 }) => {
   const [newName, setNewName] = useState("");
-  const repertoire = useAtomValue(原始字库数据原子);
-  const update = useAddAtom(原始字库数据原子);
+  const 原始字库 = useAtomValue(原始字库原子);
+  const update = useAddAtom(原始可编辑字库数据原子);
   return (
     <Popconfirm
       title="新字形名称"
@@ -243,8 +246,7 @@ export const Rename = ({
       }
       onConfirm={async () => {
         const cname = String.fromCodePoint(unicode);
-        // 改变别名，不需要联动更新
-        const character = repertoire[cname];
+        const character = 原始字库.查询(cname);
         if (!character) return;
         const newCharacter: 原始汉字数据 = {
           ...character,
@@ -271,8 +273,8 @@ export const EditGF = ({
   unicode: number;
 }) => {
   const [id, setId] = useState(0);
-  const repertoire = useAtomValue(原始字库数据原子);
-  const update = useAddAtom(原始字库数据原子);
+  const 原始字库 = useAtomValue(原始字库原子);
+  const update = useAddAtom(原始可编辑字库数据原子);
   const name = String.fromCodePoint(unicode);
   return (
     <Popconfirm
@@ -284,7 +286,7 @@ export const EditGF = ({
         // id = 0 时表示删除
         const valid = isInteger(id) && id >= 0 && id < 561;
         if (!valid) return;
-        const character = repertoire[name];
+        const character = 原始字库.查询(name);
         if (!character) return;
         const newCharacter: 原始汉字数据 = {
           ...character,
@@ -302,9 +304,9 @@ export const EditGF = ({
 };
 
 export const Delete = ({ unicode }: { unicode: number }) => {
-  const remote = useContext(RemoteContext);
+  const remote = useAtomValue(远程原子);
   const userRepertoire = useAtomValue(用户原始字库数据原子);
-  const remove = useRemoveAtom(原始字库数据原子);
+  const remove = useRemoveAtom(原始可编辑字库数据原子);
   const removeUser = useRemoveAtom(用户原始字库数据原子);
   const char = String.fromCodePoint(unicode);
   return (
@@ -325,18 +327,18 @@ export const Delete = ({ unicode }: { unicode: number }) => {
 };
 
 export const EditGlyph = ({ character }: { character: 原始汉字数据 }) => {
-  const remote = useContext(RemoteContext);
-  const repertoire = useAtomValue(原始字库数据原子);
-  const add = useAddAtom(原始字库数据原子);
+  const remote = useAtomValue(远程原子);
+  const 原始字库 = useAtomValue(原始字库原子);
+  const add = useAddAtom(原始可编辑字库数据原子);
   const addUser = useAddAtom(用户原始字库数据原子);
-  const customGlyph = useAtomValue(字形自定义原子);
+  const 标准字形自定义 = useAtomValue(标准字形自定义原子);
   const addCustomization = useAddAtom(字形自定义原子);
-  const removeCustomization = useRemoveAtom(字形自定义原子);
   const name = String.fromCodePoint(character.unicode);
-  const isCustomization = !remote && repertoire[name] !== undefined;
+  const isCustomization = !remote && 原始字库.查询(name) !== undefined;
+  const 自定义列表 = 标准字形自定义[name] ?? [];
   const onFinish = async (component: 字形数据) => {
     if (isCustomization) {
-      addCustomization(name, component);
+      addCustomization(name, 自定义列表.concat(component));
       return true;
     }
     const newCharacter = O.set(
@@ -390,26 +392,26 @@ export const EditGlyph = ({ character }: { character: 原始汉字数据 }) => {
         />
       ),
     },
-  ];
-  if (remote) {
-    items.unshift({
+    {
       key: -4,
       label: (
-        <ComponentForm
-          title="添加自定义基本部件"
-          initialValues={模拟基本部件()}
+        <IdentityForm
+          title="添加自定义全等字形"
+          initialValues={模拟全等()}
           current={name}
           onFinish={onFinish}
           noButton
         />
       ),
-    });
+    },
+  ];
+  if (remote) {
     items.unshift({
       key: -5,
       label: (
-        <IdentityForm
-          title="添加自定义全等字形"
-          initialValues={{ type: "identity", source: "一" }}
+        <ComponentForm
+          title="添加自定义基本部件"
+          initialValues={模拟基本部件()}
           current={name}
           onFinish={onFinish}
           noButton
@@ -421,17 +423,10 @@ export const EditGlyph = ({ character }: { character: 原始汉字数据 }) => {
     items.unshift(
       ...character.glyphs.map((x, index) => ({
         key: index,
-        label: `选择第 ${index + 1} 个系统字形`,
-        onClick: () => addCustomization(name, x),
+        label: `添加第 ${index + 1} 个系统字形`,
+        onClick: () => addCustomization(name, 自定义列表.concat(x)),
       })),
     );
-    if (customGlyph[name] !== undefined) {
-      items.push({
-        key: -5,
-        label: <span>取消自定义字形</span>,
-        onClick: () => removeCustomization(name),
-      });
-    }
   }
   return (
     <Dropdown menu={{ items }}>
@@ -447,8 +442,8 @@ export const QuickPatchAmbiguous = ({
   checked: boolean;
   record: 原始汉字数据;
 }) => {
-  const remote = useContext(RemoteContext);
-  const add = useAddAtom(原始字库数据原子);
+  const remote = useAtomValue(远程原子);
+  const add = useAddAtom(原始可编辑字库数据原子);
   return (
     <Checkbox
       checked={checked}

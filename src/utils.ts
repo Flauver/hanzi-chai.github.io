@@ -3,11 +3,11 @@ import useTitle from "ahooks/es/useTitle";
 import init, { validate } from "libchai";
 import { notification } from "antd";
 import type { 后端错误 } from "~/api";
-import { createContext } from "react";
 import { isEqual, range } from "lodash-es";
 import { diff } from "deep-object-diff";
-import { dump, load } from "js-yaml";
+import { dump } from "js-yaml";
 import type { WorkerOutput } from "~/worker";
+import { APP_VERSION } from "./version";
 
 export const useHashRouter = import.meta.env.MODE !== "CF";
 
@@ -19,8 +19,6 @@ export function getCurrentId(): string {
 }
 
 export const basePath = useHashRouter ? "/#/" : "/";
-
-export const RemoteContext = createContext(true);
 
 export async function validateConfig(config: 配置) {
   await init();
@@ -173,13 +171,11 @@ export class 字符过滤器 {
       result &&= this.sequenceRegex.test(笔画序列);
     }
     if (unicode) {
-      result &&= unicode === 汉字.codePointAt(0);
+      let hex_str = 汉字.codePointAt(0)?.toString(16).toLowerCase();
+      let dec_str = 汉字.codePointAt(0)?.toString(10);
+      result &&= unicode.toLowerCase() === hex_str || unicode === dec_str;
     }
-    if ("glyphs" in 数据) {
-      result &&= 数据.glyphs.some((glyph) => this.匹配字形(glyph));
-    } else if ("glyph" in 数据) {
-      result &&= this.匹配字形(数据.glyph);
-    }
+    result &&= 数据.glyphs.some((glyph) => this.匹配字形(glyph));
     return result;
   }
 
@@ -200,7 +196,7 @@ export class 字符过滤器 {
 export interface 字符过滤器参数 {
   name?: string;
   sequence?: string;
-  unicode?: number;
+  unicode?: string;
   tag?: string;
   part?: string;
   operator?: 结构表示符;
@@ -230,11 +226,6 @@ export interface 编码条目 {
 }
 
 export type 编码结果 = 编码条目[];
-
-export const formatDate = (date: Date) => {
-  return `${date.getMonth() + 1
-    }-${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
-};
 
 export const 数字 = (n: number) => {
   const 汉字数字 = "零一二三四五六七八九";
